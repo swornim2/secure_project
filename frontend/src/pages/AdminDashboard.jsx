@@ -8,9 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Home, ArrowLeft, CheckCircle, XCircle, Clock, Filter } from 'lucide-react';
+import { Home, ArrowLeft, CheckCircle, XCircle, Clock, Filter, AlertTriangle, Settings } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -23,6 +25,14 @@ const AdminDashboard = () => {
   const [actionType, setActionType] = useState('accept');
   const [filterStatus, setFilterStatus] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [covidDialogOpen, setCovidDialogOpen] = useState(false);
+  const [covidRestrictions, setCovidRestrictions] = useState({
+    level: 'medium',
+    density_limits: '1 person per 4 sqm',
+    mask_required: true,
+    quarantine_required: false,
+    message: 'Current restrictions recommend remote services. Masks required for in-person visits.'
+  });
 
   useEffect(() => {
     if (user?.role !== 'admin') {
@@ -30,6 +40,7 @@ const AdminDashboard = () => {
       return;
     }
     fetchBookings();
+    fetchCovidRestrictions();
   }, [user]);
 
   useEffect(() => {
@@ -49,6 +60,27 @@ const AdminDashboard = () => {
       toast.error('Failed to load bookings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCovidRestrictions = async () => {
+    try {
+      const response = await axios.get(`${API}/covid/restrictions`);
+      setCovidRestrictions(response.data);
+    } catch (error) {
+      toast.error('Failed to load COVID restrictions');
+    }
+  };
+
+  const handleUpdateCovidRestrictions = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/admin/covid/restrictions`, covidRestrictions);
+      toast.success('COVID-19 restrictions updated successfully! All users have been notified.');
+      setCovidDialogOpen(false);
+      fetchCovidRestrictions();
+    } catch (error) {
+      toast.error('Failed to update COVID restrictions');
     }
   };
 
@@ -116,6 +148,118 @@ const AdminDashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8" data-testid="admin-dashboard-container">
+        {/* COVID Restrictions Management */}
+        <Card className="mb-6 border-l-4 border-blue-500">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-6 h-6 text-blue-600" />
+                <div>
+                  <CardTitle>COVID-19 Restrictions Management</CardTitle>
+                  <CardDescription>Update current restriction levels for all users</CardDescription>
+                </div>
+              </div>
+              <Dialog open={covidDialogOpen} onOpenChange={setCovidDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Settings className="w-4 h-4 mr-2" />
+                    Update Restrictions
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Update COVID-19 Restrictions</DialogTitle>
+                    <DialogDescription>
+                      Changes will be applied immediately and all users will be notified
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <form onSubmit={handleUpdateCovidRestrictions} className="space-y-4">
+                    <div>
+                      <Label htmlFor="level">Restriction Level *</Label>
+                      <Select 
+                        value={covidRestrictions.level} 
+                        onValueChange={(value) => setCovidRestrictions({...covidRestrictions, level: value})}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low - Normal Operations</SelectItem>
+                          <SelectItem value="medium">Medium - Caution Advised</SelectItem>
+                          <SelectItem value="high">High - Restricted Operations</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="density_limits">Density Limits *</Label>
+                      <Input
+                        id="density_limits"
+                        value={covidRestrictions.density_limits}
+                        onChange={(e) => setCovidRestrictions({...covidRestrictions, density_limits: e.target.value})}
+                        placeholder="e.g., 1 person per 4 sqm"
+                        required
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="mask_required">Masks Required</Label>
+                      <Switch
+                        id="mask_required"
+                        checked={covidRestrictions.mask_required}
+                        onCheckedChange={(checked) => setCovidRestrictions({...covidRestrictions, mask_required: checked})}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="quarantine_required">Quarantine Required</Label>
+                      <Switch
+                        id="quarantine_required"
+                        checked={covidRestrictions.quarantine_required}
+                        onCheckedChange={(checked) => setCovidRestrictions({...covidRestrictions, quarantine_required: checked})}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="message">Public Message *</Label>
+                      <Textarea
+                        id="message"
+                        value={covidRestrictions.message}
+                        onChange={(e) => setCovidRestrictions({...covidRestrictions, message: e.target.value})}
+                        placeholder="Message to display to all users..."
+                        rows={3}
+                        required
+                      />
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <Button type="button" variant="outline" onClick={() => setCovidDialogOpen(false)} className="flex-1">
+                        Cancel
+                      </Button>
+                      <Button type="submit" className="flex-1">
+                        Update & Notify Users
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
+                covidRestrictions.level === 'low' ? 'bg-green-100 text-green-800' :
+                covidRestrictions.level === 'high' ? 'bg-red-100 text-red-800' :
+                'bg-orange-100 text-orange-800'
+              }`}>
+                {covidRestrictions.level?.toUpperCase()} LEVEL
+              </span>
+              <p className="text-gray-700">{covidRestrictions.message}</p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Card data-testid="stat-card-total">
